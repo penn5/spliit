@@ -47,12 +47,13 @@ import { Save } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { MutableRefObject, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { match } from 'ts-pattern'
 import { DeletePopup } from './delete-popup'
 import { extractCategoryFromTitle } from './expense-form-actions'
 import { Textarea } from './ui/textarea'
+import { SplitMode } from '@prisma/client'
 
 export type Props = {
   group: NonNullable<Awaited<ReturnType<typeof getGroup>>>
@@ -249,9 +250,28 @@ export function ExpenseForm({
   >(new Set())
 
   const sExpense = isIncome ? 'Income' : 'Expense'
-  const sPaid = isIncome ? 'received' : 'paid'
 
+  const lastFormValuesRef: MutableRefObject<ExpenseFormValues | null> = useRef(null)
+  if (lastFormValuesRef.current === null) {
+    lastFormValuesRef.current = form.getValues()
+  }
+  function getLastFormValues() {
+    return lastFormValuesRef.current as ExpenseFormValues;
+  }
   useEffect(() => {
+    const newFormValues = form.getValues()
+    // If the amount didn't change, and the splitMode was at no point BY_AMOUNT,
+    // we don't need to reinitialise the splitting options.
+    if (
+      (
+        getLastFormValues().splitMode === newFormValues.splitMode
+        || getLastFormValues().splitMode !== SplitMode.BY_AMOUNT
+        && newFormValues.splitMode !== SplitMode.BY_AMOUNT)
+      && getLastFormValues().amount === newFormValues.amount
+    ) {
+      return
+    }
+    lastFormValuesRef.current = newFormValues
     setManuallyEditedParticipants(new Set())
     const newPaidFor = defaultSplittingOptions.paidFor.map((participant) => ({
       ...participant,
